@@ -1,62 +1,102 @@
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 import argparse
+from anthropic import Anthropic
+import os, subprocess
+from dotenv import load_dotenv
+import json
 
-
-
-def generate_response(model_name: str, user_prompt:str):
-
-    # Load model and tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16, device_map="auto")
-
-    # Format prompt using chat template
-    messages = [{"role": "user", "content": user_prompt}]
-    formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-
-    # Tokenize input
-    inputs = tokenizer(formatted_prompt, return_tensors="pt").to(model.device)
-
-    # Generation config (same as llm_wrapper.py)
-    generation_config = GenerationConfig(
-        max_new_tokens=1024,
-        do_sample=False,
-        pad_token_id=tokenizer.eos_token_id
+def generate_response(user_prompt):
+    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=4000,
+        messages=[{"role": "user", "content": user_prompt}]
     )
+    return response
 
-    ## Generation config with sampling
-    # generation_config = GenerationConfig(
-    #     max_new_tokens=1024,
-    #     do_sample=True,
-    #     temperature=0.3,
-    #     top_p=0.9,
-    #     pad_token_id=tokenizer.eos_token_id
-    #     )
+def get_prompt(args: argparse.Namespace) -> str:
 
 
-    # Generate response
-    with torch.no_grad():
-        output_tokens = model.generate(**inputs, generation_config=generation_config)
+    with open(args.resume, "r") as f:
+        resume_content = f.read()
+    with open(args.job_description, "r") as f:
+        job_description_content = f.read()
+    with open(args.template, "r") as f:
+        template_content = f.read()
 
-    # Decode only newly generated tokens
-    input_length = inputs['input_ids'].shape[1]
-    newly_generated_tokens = output_tokens[0, input_length:]
-    response = tokenizer.decode(newly_generated_tokens, skip_special_tokens=True).strip()
-    print(user_prompt)
-    print(response)
+    user_prompt = f"""You are a professional resume writer. Generate a LaTeX resume optimized for the job description below.
+    You are allowed to bluff but do not MAKE UP ANY stats. For the same experience, use the keywords from the job description to generate the resume.
 
+    LATEX TEMPLATE TO FILL:
+    {template_content}
+
+    INSTRUCTIONS:
+    1. Replace placeholders like {{{{NAME}}}}, {{{{EMAIL}}}}, {{{{EXPERIENCE}}}} with actual content
+    2. For {{{{EXPERIENCE}}}}: Select 2-4 most relevant jobs from resume and format as:
+    \\subsection*{{Job Title -- Company \\hfill Dates}}
+    \\begin{{itemize}}[leftmargin=*,noitemsep]
+        \\item Achievement (quantified if numbers available)
+        \\item Achievement
+    \\end{{itemize}}
+
+    3. For {{{{SUMMARY}}}}: Write 2-3 sentences highlighting experience relevant to this job
+    4. For {{{{SKILLS}}}}: Include only skills relevant to job description
+    5. Use ONLY information from the resume below - DO NOT fabricate
+
+    CRITICAL:
+    - Return ONLY the complete LaTeX code
+    - Start with \\documentclass
+    - Escape special characters: % → \\%, & → \\&, # → \\#
+    - Do not include markdown code blocks
+
+    USER'S RESUME:
+    {resume_content}
+
+    JOB DESCRIPTION:
+    {job_description_content}
+
+    Generate the complete LaTeX document now:"""
+    return user_prompt
 
 def main():
+    load_dotenv()
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-r", "--resume", required=True)
     arg_parser.add_argument("-j", "--job_description", required=True)
-    arg_parser.add_argument("-t", "--template", required=True, default="txt_files/template.txt")
-
+    arg_parser.add_argument("-t", "--template", default="txt_files/template.txt")
     args = arg_parser.parse_args()
-    model_name = "deepseek-ai/deepseek-coder-6.7b-instruct"
-    user_prompt = "Take the resume of the user and generate a latex code for the resume based on the job description. You are allowed to bluff but do not MAKE UP ANY stats. Resume: {args.resume} Job Description: {args.job_description} Template: {args.template}"
-    generate_response(model_name, user_prompt)
 
+
+    user_prompt = get_prompt(args)
+    response =generate_response(user_prompt)
+    print(response.content[0].text)
+    print(response.usage.input_tokens)
+    print(response.usage.output_tokens)
+    total_tokens = response.usage.input_tokens + response.usage.output_tokens
+    print(total_tokens)
+
+    # convert response to dict 
+    response_dict = {
+        'id': response.id,
+        'type': response.type,
+        'role': response.role,
+        'model': response.model,
+        'content': [
+            {
+                'type': block.type,
+                'text': block.text
+            } for block in response.content
+        ],
+        'stop_reason': response.stop_reason,
+        'stop_sequence': response.stop_sequence,
+        'usage': {
+            'input_tokens': response.usage.input_tokens,
+            'output_tokens': response.usage.output_tokens
+        }
+    }
+    with open("response.txt", "w") as f:
+        json.dump(response_dict, f, indent=2)    
+    with open("resume.tex", "w") as f:
+        f.write(response.content[0].text)
 
 if __name__ == "__main__":
     main()
