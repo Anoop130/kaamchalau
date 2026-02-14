@@ -1,0 +1,16 @@
+The Intel Sector at Leidos currently has an internship opening for a software developer to work in our Orlando FL office. This is an exciting opportunity to use your experience helping the Army’s Futures Command mission.  In this mission we are developing and applying machine learning, artificial intelligence, and image processing techniques to 2D and 3D geospatial data.  
+
+Primary Responsibilities
+
+The role will focus on the research and support the development and integration of AI/ML/IP to the current high-resolution inset baseline for One World Terrain.  
+
+Basic Qualifications
+
+Programming knowledge in Python, Java, C, and JavaScript with a basic understanding of web security.
+
+Working towards a Bachelors’ Degree in computer science or related discipline. 
+
+US Citizenship Required.
+
+Ability to obtain and maintain a Secret security clearance.
+
