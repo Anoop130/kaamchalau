@@ -30,10 +30,15 @@ function App() {
         })
       })
 
-      if (!response.ok) throw new Error('Failed to generate resume')
       const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate resume')
+      }
+      
       setGeneratedResume(data.resume)
     } catch (err) {
+      console.error('Error generating resume:', err)
       setError(err.message || 'An error occurred')
     } finally {
       setLoading(false)
