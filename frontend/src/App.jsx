@@ -209,7 +209,12 @@ function App() {
 
         {generatedResume && (
           <div className="output-section">
-            <h2>Generated LaTeX Resume</h2>
+            <div className="output-header">
+              <h2>Generated LaTeX Resume</h2>
+              <button className="copy-btn" onClick={handleCopyResume}>
+                📋 Copy
+              </button>
+            </div>
             <div className="resume-output">
               <pre>{generatedResume}</pre>
             </div>
