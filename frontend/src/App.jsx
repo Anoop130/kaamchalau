@@ -4,11 +4,13 @@ import './App.css'
 function App() {
   const [jobDescription, setJobDescription] = useState('')
   const [resume, setResume] = useState('')
+  const [template, setTemplate] = useState('')
   const [generatedResume, setGeneratedResume] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [jobDescriptionFile, setJobDescriptionFile] = useState(null)
   const [resumeFile, setResumeFile] = useState(null)
+  const [templateFile, setTemplateFile] = useState(null)
 
   const handleGenerateResume = async () => {
     if (!jobDescription.trim() || !resume.trim()) {
@@ -26,7 +28,8 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobDescription,
-          resume
+          resume,
+          template: template || undefined
         })
       })
 
@@ -55,6 +58,22 @@ function App() {
     document.body.removeChild(element)
   }
 
+  const handleCopyResume = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedResume)
+      // Optional: Show a temporary success message
+      const copyBtn = document.querySelector('.copy-btn')
+      const originalText = copyBtn.textContent
+      copyBtn.textContent = '✓ Copied!'
+      setTimeout(() => {
+        copyBtn.textContent = originalText
+      }, 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+      setError('Failed to copy to clipboard')
+    }
+  }
+
   const handleFileSelect = (file, setContent, setFileName) => {
     if (!file) return
 
@@ -80,6 +99,13 @@ function App() {
     const file = e.target.files?.[0]
     if (file) {
       handleFileSelect(file, setResume, setResumeFile)
+    }
+  }
+
+  const handleTemplateFileChange = (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleFileSelect(file, setTemplate, setTemplateFile)
     }
   }
 
@@ -141,6 +167,32 @@ function App() {
               value={resume}
               onChange={(e) => setResume(e.target.value)}
               rows="8"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="template">LaTeX Template (Optional)</label>
+            <div className="file-input-wrapper">
+              <input
+                type="file"
+                id="template-file"
+                onChange={handleTemplateFileChange}
+                accept=".txt,.tex"
+                className="file-input"
+              />
+              <label htmlFor="template-file" className="file-input-label">
+                📁 Browse Template
+              </label>
+              {templateFile && (
+                <span className="file-name">Loaded: {templateFile.name}</span>
+              )}
+            </div>
+            <textarea
+              id="template"
+              placeholder="Paste your LaTeX template here or browse for a file (optional)..."
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+              rows="6"
             />
           </div>
 
