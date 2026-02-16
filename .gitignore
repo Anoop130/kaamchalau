@@ -11,7 +11,6 @@ Thumbs.db
 # Environment
 .env
 .env.local
-*.log
 
 # Dependencies
 node_modules/
@@ -24,7 +23,25 @@ venv/
 dist/
 build/
 *.o
+
+# Generated outputs (resumes, PDFs, LaTeX artifacts)
+outputs/
+*.tex
+*.pdf
+*.aux
+*.log
 *.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# Frontend generated files
+frontend/*.pdf
+frontend/*.tex
+frontend/*.aux
+frontend/*.log
+frontend/*.out
+frontend/*.txt
 
 # Project specific
 Project_Specification.pdf

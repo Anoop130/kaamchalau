@@ -1,14 +1,16 @@
 # KaamChalau - AI Resume Optimizer
 
-An AI-powered resume optimization tool that tailors your resume for specific job descriptions using Groq's Llama models.
+An AI-powered resume optimization tool that tailors your resume for specific job descriptions using multiple AI models.
 
 ## Features
 
-- 🤖 AI-powered resume generation using Llama 3.3 70B via Groq API
-- 📝 LaTeX resume output for professional formatting
-- 🎯 Job-specific optimization with keyword matching
-- 🚀 Modern React frontend with Vite
-- ⚡ Fast inference with Groq's API
+- 🤖 **Multiple AI Models**: Choose between Groq (Llama 3.3 70B) or Claude (Anthropic)
+- 📄 **PDF Preview**: Real-time PDF preview with zoom controls
+- 📝 **LaTeX Output**: Professional LaTeX resume generation
+- 🎯 **Job-Specific Optimization**: Keyword matching and tailoring
+- 📋 **Custom Templates**: Upload your own LaTeX templates
+- 🚀 **Modern UI**: React frontend with responsive design
+- ⚡ **Fast Inference**: Quick resume generation
 
 ## Prerequisites
 
@@ -55,13 +57,19 @@ Create a `.env` file in the root directory:
 cp .env.example .env
 ```
 
-Edit `.env` and add your Groq API key:
+Edit `.env` and add your API keys:
 
 ```
+# Required for Groq (Llama models)
 GROQ_API_KEY=your_groq_api_key_here
+
+# Optional - Required only if using Claude
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
-**Get your free Groq API key:** [https://console.groq.com/](https://console.groq.com/)
+**Get API Keys:**
+- **Groq (Free):** [https://console.groq.com/](https://console.groq.com/)
+- **Claude (Paid):** [https://console.anthropic.com/](https://console.anthropic.com/)
 
 ## Running the Application
 
@@ -122,10 +130,14 @@ kaamchalau/
 
 1. Start both backend and frontend servers (see above)
 2. Open `http://localhost:5173` in your browser
-3. Paste your resume in the left textarea
-4. Paste the job description in the right textarea
-5. Click "Generate Optimized Resume"
-6. Download the generated LaTeX resume
+3. Enter your job description
+4. Enter your resume content
+5. (Optional) Upload a custom LaTeX template
+6. **Select AI Model**: Choose between Groq or Claude from the dropdown
+7. Click "Generate Optimized Resume"
+8. View the generated LaTeX code and PDF preview
+9. Use zoom controls (+/-) to adjust PDF view
+10. Download LaTeX file or PDF
 
 ### CLI (Alternative)
 
@@ -143,7 +155,8 @@ This will output the LaTeX resume to `resume.tex`
 
 - `flask` - Web framework
 - `flask-cors` - CORS support
-- `groq` - Groq API client
+- `groq` - Groq API client (for Llama models)
+- `anthropic` - Anthropic API client (for Claude models)
 - `python-dotenv` - Environment variable management
 
 ### Node.js (Frontend)
@@ -153,21 +166,21 @@ This will output the LaTeX resume to `resume.tex`
 
 ## Configuration
 
-### Changing the AI Model
+### Selecting AI Model
 
-Edit `app.py` and change the model parameter in the Groq API call:
+You can choose between two AI providers directly from the web interface:
 
-```python
-response = client.chat.completions.create(
-    model="llama-3.3-70b-versatile",  # Change this
-    ...
-)
-```
+1. **Groq (Llama 3.3 70B)** - Fast, free tier available
+   - Model: `llama-3.3-70b-versatile`
+   - 8K context window
+   - Requires: `GROQ_API_KEY`
 
-Available models:
-- `llama-3.3-70b-versatile` (8K context, recommended)
-- `llama-3.1-70b-versatile` (128K context)
-- `llama-3.1-8b-instant` (faster, smaller)
+2. **Claude (Anthropic)** - High quality, paid
+   - Model: `claude-3-5-sonnet-20241022`
+   - 200K context window
+   - Requires: `ANTHROPIC_API_KEY`
+
+Simply select your preferred model from the dropdown in the web interface before generating.
 
 ### Customizing the Resume Template
 
@@ -178,9 +191,23 @@ Edit `txt_files/template.txt` to modify the LaTeX resume structure.
 ### "Failed to generate resume" Error
 
 1. **Check if backend is running:** Make sure `python app.py` is running in a separate terminal
-2. **Check API key:** Ensure `GROQ_API_KEY` is set in your `.env` file
+2. **Check API key:** Ensure the appropriate API key is set in your `.env` file
+   - For Groq: `GROQ_API_KEY`
+   - For Claude: `ANTHROPIC_API_KEY`
 3. **Check console:** Open browser DevTools (F12) to see detailed error messages
 4. **Check backend logs:** Look at the terminal running `app.py` for error messages
+
+### "PDF compilation failed" Error
+
+Make sure you have LaTeX installed:
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install texlive-latex-base texlive-latex-extra
+
+# macOS
+brew install mactex-no-gui
+```
 
 ### Import Errors
 
