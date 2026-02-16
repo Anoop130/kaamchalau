@@ -5,6 +5,7 @@ function App() {
   const [jobDescription, setJobDescription] = useState('')
   const [resume, setResume] = useState('')
   const [template, setTemplate] = useState('')
+  const [aiModel, setAiModel] = useState('groq')
   const [generatedResume, setGeneratedResume] = useState('')
   const [pdfUrl, setPdfUrl] = useState(null)
   const [pdfError, setPdfError] = useState(null)
@@ -35,7 +36,8 @@ function App() {
         body: JSON.stringify({
           jobDescription,
           resume,
-          template: template || undefined
+          template: template || undefined,
+          aiModel
         })
       })
 
@@ -242,6 +244,19 @@ function App() {
               onChange={(e) => setTemplate(e.target.value)}
               rows="6"
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="ai-model">AI Model</label>
+            <select
+              id="ai-model"
+              value={aiModel}
+              onChange={(e) => setAiModel(e.target.value)}
+              className="model-select"
+            >
+              <option value="groq">Groq (Llama 3.3 70B)</option>
+              <option value="claude">Claude (Anthropic)</option>
+            </select>
           </div>
 
           {error && <div className="error-message">{error}</div>}

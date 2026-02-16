@@ -7,6 +7,12 @@ import tempfile
 import base64
 from dotenv import load_dotenv
 
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -64,6 +70,42 @@ def compile_latex_to_pdf(latex_content):
         }
 
 
+def get_prompt(resume_content, job_description_content, template_content):
+    """Generate the prompt for AI models"""
+    return f"""You are a professional resume writer. Generate a LaTeX resume optimized for the job description below.
+You are allowed to bluff but do not MAKE UP ANY stats. For the same experience, use the keywords from the job description to generate the resume.
+
+LATEX TEMPLATE TO FILL:
+{template_content}
+
+INSTRUCTIONS:
+1. Replace placeholders like {{{{NAME}}}}, {{{{EMAIL}}}}, {{{{EXPERIENCE}}}} with actual content
+2. For {{{{EXPERIENCE}}}}: Select 2-4 most relevant jobs from resume and format as:
+\\subsection*{{Job Title -- Company \\hfill Dates}}
+\\begin{{itemize}}[leftmargin=*,noitemsep]
+    \\item Achievement (quantified if numbers available)
+    \\item Achievement
+\\end{{itemize}}
+
+3. For {{{{SUMMARY}}}}: Write 2-3 sentences highlighting experience relevant to this job
+4. For {{{{SKILLS}}}}: Include only skills relevant to job description
+5. Use ONLY information from the resume below - DO NOT fabricate
+
+CRITICAL:
+- Return ONLY the complete LaTeX code
+- Start with \\documentclass
+- Escape special characters: % → \\%, & → \\&, # → \\#
+- Do not include markdown code blocks
+
+USER'S RESUME:
+{resume_content}
+
+JOB DESCRIPTION:
+{job_description_content}
+
+Generate the complete LaTeX document now:"""
+
+
 def generate_resume_with_groq(resume_content, job_description_content, template_content=None):
     """Generate optimized resume using Groq API"""
     try:
@@ -76,44 +118,12 @@ def generate_resume_with_groq(resume_content, job_description_content, template_
             else:
                 template_content = ""  # Use empty if template doesn't exist
 
-        # Construct prompt
-        user_prompt = f"""You are a professional resume writer. Generate a LaTeX resume optimized for the job description below.
-    You are allowed to bluff but do not MAKE UP ANY stats. For the same experience, use the keywords from the job description to generate the resume.
-
-    LATEX TEMPLATE TO FILL:
-    {template_content}
-
-    INSTRUCTIONS:
-    1. Replace placeholders like {{{{NAME}}}}, {{{{EMAIL}}}}, {{{{EXPERIENCE}}}} with actual content
-    2. For {{{{EXPERIENCE}}}}: Select 2-4 most relevant jobs from resume and format as:
-    \\subsection*{{Job Title -- Company \\hfill Dates}}
-    \\begin{{itemize}}[leftmargin=*,noitemsep]
-        \\item Achievement (quantified if numbers available)
-        \\item Achievement
-    \\end{{itemize}}
-
-    3. For {{{{SUMMARY}}}}: Write 2-3 sentences highlighting experience relevant to this job
-    4. For {{{{SKILLS}}}}: Include only skills relevant to job description
-    5. Use ONLY information from the resume below - DO NOT fabricate
-
-    CRITICAL:
-    - Return ONLY the complete LaTeX code
-    - Start with \\documentclass
-    - Escape special characters: % → \\%, & → \\&, # → \\#
-    - Do not include markdown code blocks
-
-    USER'S RESUME:
-    {resume_content}
-
-    JOB DESCRIPTION:
-    {job_description_content}
-
-    Generate the complete LaTeX document now:"""
+        user_prompt = get_prompt(resume_content, job_description_content, template_content)
 
         # Call Groq API
         client = Groq(api_key=os.getenv("GROQ_API_KEY"))
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-20b",
             messages=[{"role": "user", "content": user_prompt}],
             max_tokens=4000,
             temperature=0.7
@@ -126,6 +136,51 @@ def generate_resume_with_groq(resume_content, job_description_content, template_
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.total_tokens
+            }
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+def generate_resume_with_claude(resume_content, job_description_content, template_content=None):
+    """Generate optimized resume using Claude API"""
+    try:
+        if not ANTHROPIC_AVAILABLE:
+            return {
+                "success": False,
+                "error": "Anthropic library not installed. Run: pip install anthropic"
+            }
+
+        # Read template if not provided
+        if not template_content:
+            template_path = "txt_files/template.txt"
+            if os.path.exists(template_path):
+                with open(template_path, "r") as f:
+                    template_content = f.read()
+            else:
+                template_content = ""  # Use empty if template doesn't exist
+
+        user_prompt = get_prompt(resume_content, job_description_content, template_content)
+
+        # Call Claude API
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4000,
+            messages=[{"role": "user", "content": user_prompt}]
+        )
+
+        return {
+            "success": True,
+            "resume": response.content[0].text,
+            "usage": {
+                "prompt_tokens": response.usage.input_tokens,
+                "completion_tokens": response.usage.output_tokens,
+                "total_tokens": response.usage.input_tokens + response.usage.output_tokens
             }
         }
 
@@ -150,20 +205,28 @@ def generate_resume():
         job_description = data['jobDescription'].strip()
         resume = data['resume'].strip()
         template = data.get('template', '').strip() if data.get('template') else None
+        ai_model = data.get('aiModel', 'groq').lower()
 
         if not job_description or not resume:
             return jsonify({
                 "error": "Job description and resume cannot be empty"
             }), 400
 
-        # Check for API key
-        if not os.getenv("GROQ_API_KEY"):
-            return jsonify({
-                "error": "GROQ_API_KEY not found in environment variables. Please set it in your .env file"
-            }), 500
-
-        # Generate resume
-        result = generate_resume_with_groq(resume, job_description, template)
+        # Generate resume based on selected AI model
+        if ai_model == 'claude':
+            # Check for Claude API key
+            if not os.getenv("ANTHROPIC_API_KEY"):
+                return jsonify({
+                    "error": "ANTHROPIC_API_KEY not found in environment variables. Please set it in your .env file"
+                }), 500
+            result = generate_resume_with_claude(resume, job_description, template)
+        else:  # Default to groq
+            # Check for Groq API key
+            if not os.getenv("GROQ_API_KEY"):
+                return jsonify({
+                    "error": "GROQ_API_KEY not found in environment variables. Please set it in your .env file"
+                }), 500
+            result = generate_resume_with_groq(resume, job_description, template)
 
         if result["success"]:
             latex_code = result["resume"]

@@ -2,3 +2,4 @@ python-dotenv
 groq
 flask
 flask-cors
+anthropic
