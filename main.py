@@ -1,15 +1,16 @@
 import argparse
-from anthropic import Anthropic
+from groq import Groq
 import os, subprocess
 from dotenv import load_dotenv
 import json
 
 def generate_response(user_prompt):
-    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": user_prompt}],
         max_tokens=4000,
-        messages=[{"role": "user", "content": user_prompt}]
+        temperature=0.7
     )
     return response
 
@@ -68,35 +69,36 @@ def main():
 
     user_prompt = get_prompt(args)
     response =generate_response(user_prompt)
-    print(response.content[0].text)
-    print(response.usage.input_tokens)
-    print(response.usage.output_tokens)
-    total_tokens = response.usage.input_tokens + response.usage.output_tokens
+    print(response.choices[0].message.content)
+    print(response.usage.prompt_tokens)
+    print(response.usage.completion_tokens)
+    total_tokens = response.usage.total_tokens
     print(total_tokens)
 
     # convert response to dict 
     response_dict = {
         'id': response.id,
-        'type': response.type,
-        'role': response.role,
         'model': response.model,
-        'content': [
+        'choices': [
             {
-                'type': block.type,
-                'text': block.text
-            } for block in response.content
+                'index': choice.index,
+                'message': {
+                    'role': choice.message.role,
+                    'content': choice.message.content
+                },
+                'finish_reason': choice.finish_reason
+            } for choice in response.choices
         ],
-        'stop_reason': response.stop_reason,
-        'stop_sequence': response.stop_sequence,
         'usage': {
-            'input_tokens': response.usage.input_tokens,
-            'output_tokens': response.usage.output_tokens
+            'prompt_tokens': response.usage.prompt_tokens,
+            'completion_tokens': response.usage.completion_tokens,
+            'total_tokens': response.usage.total_tokens
         }
     }
     with open("response.txt", "w") as f:
         json.dump(response_dict, f, indent=2)    
     with open("resume.tex", "w") as f:
-        f.write(response.content[0].text)
+        f.write(response.choices[0].message.content)
 
 if __name__ == "__main__":
     main()
