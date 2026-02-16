@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from groq import Groq
 import os
+import subprocess
+import tempfile
+import base64
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,16 +12,69 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-def generate_resume_with_groq(resume_content, job_description_content):
+def compile_latex_to_pdf(latex_content):
+    """Compile LaTeX to PDF and return base64 encoded PDF"""
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tex_file = os.path.join(tmpdir, 'resume.tex')
+            pdf_file = os.path.join(tmpdir, 'resume.pdf')
+            
+            # Write LaTeX to file
+            with open(tex_file, 'w', encoding='utf-8') as f:
+                f.write(latex_content)
+            
+            # Compile with pdflatex
+            result = subprocess.run(
+                ['pdflatex', '-interaction=nonstopmode', '-output-directory', tmpdir, tex_file],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            # Check if PDF was created
+            if not os.path.exists(pdf_file):
+                return {
+                    "success": False,
+                    "error": f"PDF compilation failed. LaTeX errors: {result.stdout[-500:]}"
+                }
+            
+            # Read PDF and encode as base64
+            with open(pdf_file, 'rb') as f:
+                pdf_data = f.read()
+            
+            return {
+                "success": True,
+                "pdf_base64": base64.b64encode(pdf_data).decode('utf-8')
+            }
+    
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "PDF compilation timed out"
+        }
+    except FileNotFoundError:
+        return {
+            "success": False,
+            "error": "pdflatex not found. Please install TeX Live: sudo apt-get install texlive-latex-base texlive-latex-extra"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"PDF compilation error: {str(e)}"
+        }
+
+
+def generate_resume_with_groq(resume_content, job_description_content, template_content=None):
     """Generate optimized resume using Groq API"""
     try:
-        # Read template
-        template_path = "txt_files/template.txt"
-        if os.path.exists(template_path):
-            with open(template_path, "r") as f:
-                template_content = f.read()
-        else:
-            template_content = ""  # Use empty if template doesn't exist
+        # Read template if not provided
+        if not template_content:
+            template_path = "txt_files/template.txt"
+            if os.path.exists(template_path):
+                with open(template_path, "r") as f:
+                    template_content = f.read()
+            else:
+                template_content = ""  # Use empty if template doesn't exist
 
         # Construct prompt
         user_prompt = f"""You are a professional resume writer. Generate a LaTeX resume optimized for the job description below.
@@ -93,6 +149,7 @@ def generate_resume():
 
         job_description = data['jobDescription'].strip()
         resume = data['resume'].strip()
+        template = data.get('template', '').strip() if data.get('template') else None
 
         if not job_description or not resume:
             return jsonify({
@@ -106,13 +163,27 @@ def generate_resume():
             }), 500
 
         # Generate resume
-        result = generate_resume_with_groq(resume, job_description)
+        result = generate_resume_with_groq(resume, job_description, template)
 
         if result["success"]:
-            return jsonify({
-                "resume": result["resume"],
+            latex_code = result["resume"]
+            
+            # Compile LaTeX to PDF
+            pdf_result = compile_latex_to_pdf(latex_code)
+            
+            response_data = {
+                "resume": latex_code,
                 "usage": result["usage"]
-            }), 200
+            }
+            
+            # Add PDF if compilation succeeded
+            if pdf_result["success"]:
+                response_data["pdf"] = pdf_result["pdf_base64"]
+            else:
+                # Include PDF error but don't fail the request
+                response_data["pdf_error"] = pdf_result["error"]
+            
+            return jsonify(response_data), 200
         else:
             return jsonify({
                 "error": f"Failed to generate resume: {result['error']}"

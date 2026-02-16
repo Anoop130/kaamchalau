@@ -6,6 +6,9 @@ function App() {
   const [resume, setResume] = useState('')
   const [template, setTemplate] = useState('')
   const [generatedResume, setGeneratedResume] = useState('')
+  const [pdfUrl, setPdfUrl] = useState(null)
+  const [pdfError, setPdfError] = useState(null)
+  const [pdfZoom, setPdfZoom] = useState(100)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [jobDescriptionFile, setJobDescriptionFile] = useState(null)
@@ -21,6 +24,9 @@ function App() {
     setLoading(true)
     setError('')
     setGeneratedResume('')
+    setPdfUrl(null)
+    setPdfError(null)
+    setPdfZoom(100)
 
     try {
       const response = await fetch('/api/generate-resume', {
@@ -40,6 +46,25 @@ function App() {
       }
       
       setGeneratedResume(data.resume)
+      
+      // Handle PDF if available
+      if (data.pdf) {
+        // Convert base64 to blob URL
+        const base64toBlob = (base64) => {
+          const binaryString = atob(base64)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          return new Blob([bytes], { type: 'application/pdf' })
+        }
+        
+        const blob = base64toBlob(data.pdf)
+        const url = URL.createObjectURL(blob)
+        setPdfUrl(url)
+      } else if (data.pdf_error) {
+        setPdfError(data.pdf_error)
+      }
     } catch (err) {
       console.error('Error generating resume:', err)
       setError(err.message || 'An error occurred')
@@ -52,10 +77,33 @@ function App() {
     const element = document.createElement('a')
     const file = new Blob([generatedResume], { type: 'text/plain' })
     element.href = URL.createObjectURL(file)
-    element.download = 'optimized_resume.latex'
+    element.download = 'optimized_resume.tex'
     document.body.appendChild(element)
     element.click()
     document.body.removeChild(element)
+  }
+
+  const handleDownloadPdf = () => {
+    if (pdfUrl) {
+      const element = document.createElement('a')
+      element.href = pdfUrl
+      element.download = 'optimized_resume.pdf'
+      document.body.appendChild(element)
+      element.click()
+      document.body.removeChild(element)
+    }
+  }
+
+  const handleZoomIn = () => {
+    setPdfZoom(prev => Math.min(prev + 10, 200))
+  }
+
+  const handleZoomOut = () => {
+    setPdfZoom(prev => Math.max(prev - 10, 50))
+  }
+
+  const handleResetZoom = () => {
+    setPdfZoom(100)
   }
 
   const handleCopyResume = async () => {
@@ -208,20 +256,66 @@ function App() {
         </div>
 
         {generatedResume && (
-          <div className="output-section">
-            <div className="output-header">
-              <h2>Generated LaTeX Resume</h2>
-              <button className="copy-btn" onClick={handleCopyResume}>
-                📋 Copy
+          <>
+            <div className="output-section">
+              <div className="output-header">
+                <h2>Generated LaTeX Resume</h2>
+                <button className="copy-btn" onClick={handleCopyResume}>
+                  📋 Copy
+                </button>
+              </div>
+              <div className="resume-output">
+                <pre>{generatedResume}</pre>
+              </div>
+              <button className="download-btn" onClick={handleDownloadResume}>
+                ⬇️ Download LaTeX File
               </button>
             </div>
-            <div className="resume-output">
-              <pre>{generatedResume}</pre>
-            </div>
-            <button className="download-btn" onClick={handleDownloadResume}>
-              ⬇️ Download LaTeX File
-            </button>
-          </div>
+
+            {pdfUrl && (
+              <div className="output-section pdf-section">
+                <div className="output-header">
+                  <h2>PDF Preview</h2>
+                  <div className="pdf-controls">
+                    <button className="zoom-btn" onClick={handleZoomOut} title="Zoom Out">
+                      🔍−
+                    </button>
+                    <span className="zoom-level">{pdfZoom}%</span>
+                    <button className="zoom-btn" onClick={handleZoomIn} title="Zoom In">
+                      🔍+
+                    </button>
+                    <button className="zoom-btn" onClick={handleResetZoom} title="Reset Zoom">
+                      ↺
+                    </button>
+                    <button className="copy-btn" onClick={handleDownloadPdf}>
+                      ⬇️ Download
+                    </button>
+                  </div>
+                </div>
+                <div className="pdf-viewer">
+                  <div className="pdf-container" style={{ transform: `scale(${pdfZoom / 100})` }}>
+                    <iframe 
+                      src={pdfUrl} 
+                      width="100%" 
+                      height="100%"
+                      title="Resume Preview"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {pdfError && (
+              <div className="output-section">
+                <div className="output-header">
+                  <h2>PDF Preview</h2>
+                </div>
+                <div className="error-message">
+                  {pdfError}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
